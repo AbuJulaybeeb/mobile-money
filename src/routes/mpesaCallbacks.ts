@@ -30,11 +30,14 @@ import { MpesaProvider } from "../services/providers/mpesaService";
 import { mpesaStkQueryWorker } from "../workers/mpesaStkQueryWorker";
 import { TransactionModel, TransactionStatus } from "../models/transaction";
 
+import { mpesaSignatureValidator } from "../middleware/mpesaSignatureValidator";
+
 const router = Router();
 const mpesaProvider = new MpesaProvider();
 const transactionModel = new TransactionModel();
 
 router.use(ingestRateLimiter);
+router.use(mpesaSignatureValidator);
 
 router.post("/stk/callback", (req: Request, res: Response) => {
   try {
@@ -164,6 +167,60 @@ router.post("/b2c/timeout", async (req: Request, res: Response) => {
     logger.error(
       { event: "mpesa.b2c.timeout.error", error: error.message },
       "M-Pesa B2C timeout callback processing failed",
+    );
+    return res.status(200).json(MPESA_CALLBACK_ACK);
+  }
+});
+
+/** B2B (Business to Business) callback routes (#2272) */
+router.post("/b2b/result", async (req: Request, res: Response) => {
+  try {
+    const outcome = MpesaProvider.processB2CResult(
+      req.body as MpesaB2CResultBody,
+    );
+
+    logger.info(
+      {
+        event: "mpesa.b2b.result.received",
+        conversationId: outcome.conversationId,
+        resultCode: outcome.resultCode,
+        status: outcome.status,
+      },
+      "M-Pesa B2B result callback received",
+    );
+
+    await finalizeB2COutcome(outcome);
+    return res.status(200).json(MPESA_CALLBACK_ACK);
+  } catch (error: any) {
+    logger.error(
+      { event: "mpesa.b2b.result.error", error: error.message },
+      "M-Pesa B2B result callback processing failed",
+    );
+    return res.status(200).json(MPESA_CALLBACK_ACK);
+  }
+});
+
+router.post("/b2b/timeout", async (req: Request, res: Response) => {
+  try {
+    const outcome = MpesaProvider.processB2CTimeout(
+      req.body as MpesaB2CTimeoutBody,
+    );
+
+    logger.warn(
+      {
+        event: "mpesa.b2b.timeout.received",
+        conversationId: outcome.conversationId,
+        resultCode: outcome.resultCode,
+      },
+      "M-Pesa B2B queue timeout callback received",
+    );
+
+    await finalizeB2COutcome(outcome);
+    return res.status(200).json(MPESA_CALLBACK_ACK);
+  } catch (error: any) {
+    logger.error(
+      { event: "mpesa.b2b.timeout.error", error: error.message },
+      "M-Pesa B2B timeout callback processing failed",
     );
     return res.status(200).json(MPESA_CALLBACK_ACK);
   }
