@@ -320,3 +320,12 @@ export function emitPoolMetrics(
   dbPoolIdleConnections.labels(poolName).set(idle);
   dbPoolWaitingClients.labels(poolName).set(waiting);
 }
+
+// Provider Liquidity Pool Float Balance Metric
+export const momoProviderFloatBalance = new Gauge({
+  name: "momo_provider_float_balance",
+  help: "Current operational float balance for mobile money providers",
+  labelNames: ["provider", "currency"],
+  registers: [register],
+});
+

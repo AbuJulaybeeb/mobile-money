@@ -45,6 +45,8 @@ export async function shutdownQueue(): Promise<void> {
 export {
   transactionQueue,
   addTransactionJob,
+  addTransactionToQueue,
+  calculateTransactionPriority,
   getJobById,
   getJobProgress,
   getQueueStats,
@@ -67,7 +69,7 @@ export type { SyncJobData, SyncJobResult } from "./syncQueue";
 
 export { transactionWorker, closeWorker };
 export { syncWorker, closeSyncWorker };
-export { createQueueDashboard } from "./dashboard";
+export { createQueueDashboard, createDashboardAuthMiddleware } from "./dashboard";
 export {
   getQueueHealth,
   pauseQueueEndpoint,
