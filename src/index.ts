@@ -72,6 +72,9 @@ import { requestId } from "./middleware/requestId";
 import { correlationIdMiddleware } from "./middleware/correlationId";
 import { readReplicaRoutingMiddleware } from "./middleware/readReplicaRouting";
 import {
+  dbConnectionLeakDetector,
+  PoolStarvationMonitor,
+} from "./middleware/dbConnectionLeakDetector";
   publicApiRateLimiter,
   sepRateLimiter,
 } from "./middleware/rateLimitRedis";
@@ -251,11 +254,16 @@ app.use(
 );
 app.use(sessionAnomalyLogger);
 
+// Samples primary pool active/idle/waiting counts into Prometheus and alerts on
+// sustained starvation (#2293). The getter follows pool replacement on reconnect.
+const poolStarvationMonitor = new PoolStarvationMonitor(() => pool);
+
 app.get("/health", (_req: Request, res: Response) => {
   const body: HealthCheckResponse = {
     status: "ok",
     timestamp: new Date().toISOString(),
     gitHash: process.env.BUILD_HASH,
+    database: { pool: poolStarvationMonitor.getState() },
   };
   res.json(body);
 });
@@ -541,6 +549,8 @@ async function initializeRuntime(): Promise<void> {
   // Initialize background jobs and monitoring
   const { startJobs } = await import("./jobs/scheduler.js");
   startJobs();
+
+  poolStarvationMonitor.start();
 
   // Local fiat rates from the on-chain oracle, when ORACLE_RATES_ENABLED is set
   // and configured. Not awaited: until the first refresh completes, and for any

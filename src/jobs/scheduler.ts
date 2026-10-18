@@ -37,6 +37,7 @@ import { runStellarReconciliationJob } from "../workers/stellarReconciliation";
 import { runAirtelReconciliationWorker } from "../workers/airtelReconciliation";
 import { runQuoteExpirationJob } from "./quoteExpirationJob";
 import { runDailySarSummaryJob } from "./dailySarSummaryJob";
+import { runPartitionManagerJob } from "./partitionManager";
 import { withJobTrace } from "../queue/jobTracing";
 
 interface JobConfig {
@@ -244,6 +245,13 @@ const JOBS: JobConfig[] = [
     schedule: process.env.DAILY_SAR_SUMMARY_CRON || "0 0 * * *",
     timezone: "UTC",
     handler: runDailySarSummaryJob,
+  },
+  {
+    name: "audit-log-partition-manager",
+    // Daily at 00:15 UTC - pre-creates the next months' audit_logs partitions
+    schedule: process.env.AUDIT_LOG_PARTITION_CRON || "15 0 * * *",
+    timezone: "UTC",
+    handler: runPartitionManagerJob,
   },
   {
     name: "dlq-cleanup",
