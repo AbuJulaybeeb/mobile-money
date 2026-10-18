@@ -8,6 +8,7 @@ import { SAMPLE_WEBHOOK_PAYLOAD } from "../routes/webhooks";
 import { WebhookCacheInvalidation } from "./cacheAside";
 import { signWebhookPayload } from "../crypto/webhookSigning";
 import { validateWebhookUrl, SsrfBlockedError } from "../security/ssrf";
+import { createWebhookSignature } from "../utils/webhookSigner";
 
 const model = new MerchantWebhookModel();
 
@@ -79,6 +80,7 @@ async function deliver(
 
   const body = JSON.stringify(payload);
   const signature = signPayload(body, secret);
+  const momoHeaders = createWebhookSignature(body, secret);
 
   try {
     const controller = new AbortController();
@@ -91,6 +93,7 @@ async function deliver(
         headers: {
           "Content-Type": "application/json",
           "X-Webhook-Signature": signature,
+          ...momoHeaders,
           "User-Agent": "MobileMoney-Webhook/1.0",
         },
         body,
