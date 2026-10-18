@@ -75,6 +75,10 @@ import {
   dbConnectionLeakDetector,
   PoolStarvationMonitor,
 } from "./middleware/dbConnectionLeakDetector";
+  publicApiRateLimiter,
+  sepRateLimiter,
+} from "./middleware/rateLimitRedis";
+import { dbConnectionLeakDetector } from "./middleware/dbConnectionLeakDetector";
 import { i18nMiddleware } from "./utils/i18n";
 import { metricsMiddleware } from "./middleware/metrics";
 import { tracingMetricsMiddleware } from "./middleware/tracingMetrics";
@@ -130,7 +134,10 @@ import { WebSocketManager } from "./websocket";
 import { layeredCache } from "./services/layeredCache";
 import { ERROR_CODES } from "./constants/errorCodes";
 import { startApolloServer } from "./graphql/server";
-import { applySecurityMiddleware } from "./config/express";
+import {
+  applySecurityMiddleware,
+  interactiveSecurityMiddleware,
+} from "./config/express";
 import { createCorsMiddleware } from "./middleware/cors";
 
 dotenv.config();
@@ -196,6 +203,8 @@ app.use(tracingMetricsMiddleware);
 // Helmet, CORS, and related security headers are applied inside
 // applySecurityMiddleware() imported from "./config/express".
 applySecurityMiddleware(app);
+// Stricter, view-specific headers for server-rendered SEP-24 web views.
+app.use("/sep24/interactive", interactiveSecurityMiddleware);
 
 // Compression middleware
 if (process.env.COMPRESSION_ENABLED !== "false") {
@@ -263,7 +272,7 @@ app.get("/health", (_req: Request, res: Response) => {
 // mobile money provider gateways) plus memory/uptime stats. See src/routes/health.ts.
 app.use(deepHealthRoutes);
 
-app.get("/api/live-rates", async (_req: Request, res: Response) => {
+app.get("/api/live-rates", publicApiRateLimiter, async (_req: Request, res: Response) => {
   try {
     const response = await axios.get("https://open.er-api.com/v6/latest/USD", {
       timeout: 5000,
@@ -402,7 +411,7 @@ app.get("/health/lb", async (req: Request, res: Response) => {
   res.status(healthy ? 200 : 503).json(responseData);
 });
 
-app.use("/.well-known/stellar.toml", tomlRouter);
+app.use("/.well-known/stellar.toml", publicApiRateLimiter, tomlRouter);
 app.use(express.static(path.join(process.cwd(), "public")));
 app.use(globalTimeout);
 app.use(haltOnTimedout);
@@ -464,7 +473,7 @@ app.use("/api/cross-chain", crossChainRouter);
 app.use("/api/stellar", stellarRouter);
 app.use("/api/reconciliation", reconciliationRoutes);
 app.use("/api/exchange-rate-buffers", exchangeRateBufferRoutes);
-app.use("/api/rates", slidingRateLimiter({
+app.use("/api/rates", publicApiRateLimiter, slidingRateLimiter({
   windowMs: 60 * 1000,
   anonymousLimit: 60,
   authenticatedLimit: 600,
@@ -473,7 +482,7 @@ app.use("/api/admin/assets", adminAssetRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/statements", statementsRoutes);
 app.use("/api/monitoring", adminControllerRouter);
-app.get("/", (_req: Request, res: Response) => {
+app.get("/", interactiveSecurityMiddleware, (_req: Request, res: Response) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(SEP24_INTERACTIVE_HTML);
 });
@@ -491,14 +500,14 @@ if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
   const mockWaveRouter = require("./routes/mockWave").default;
   app.use("/mock/wave", mockWaveRouter);
 }
-app.use("/api/admin/auth", createAdminSep10Router());
-app.use("/sep10", createSep10Router());
-app.use("/sep8", createSep8Router(pool));
-app.use("/sep31", sep31Router);
-app.use("/sep24", sep24Router);
-app.use("/sep38", sep38Router);
-app.use("/sep12", createSep12Router(pool));
-app.use("/sep30", sep30Routes);
+app.use("/api/admin/auth", sepRateLimiter, createAdminSep10Router());
+app.use("/sep10", sepRateLimiter, createSep10Router());
+app.use("/sep8", sepRateLimiter, createSep8Router(pool));
+app.use("/sep31", sepRateLimiter, sep31Router);
+app.use("/sep24", sepRateLimiter, sep24Router);
+app.use("/sep38", sepRateLimiter, sep38Router);
+app.use("/sep12", sepRateLimiter, createSep12Router(pool));
+app.use("/sep30", sepRateLimiter, sep30Routes);
 
 // Prometheus Metrics Scraper Endpoint
 app.use("/metrics", createMetricsRouter());
