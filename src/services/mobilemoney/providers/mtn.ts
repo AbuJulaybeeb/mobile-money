@@ -554,7 +554,10 @@ export class MTNProvider extends BaseProvider {
 
   async getTransactionStatus(
     referenceId: string,
-  ): Promise<{ status: "completed" | "failed" | "pending" | "unknown" }> {
+  ): Promise<{
+    status: "completed" | "failed" | "pending" | "unknown";
+    operatorCode?: string;
+  }> {
     try {
       const response = await this.withAuth((token) =>
         axios.get(
@@ -570,12 +573,27 @@ export class MTNProvider extends BaseProvider {
       );
 
       const providerStatus = String(response.data?.status ?? "").toUpperCase();
-      if (providerStatus === "SUCCESSFUL") return { status: "completed" };
-      if (providerStatus === "FAILED") return { status: "failed" };
-      if (providerStatus === "PENDING") return { status: "pending" };
-      return { status: "unknown" };
-    } catch {
-      return { status: "unknown" };
+      const operatorCode =
+        response.data?.status ?? response.data?.reason ?? "STATUS_QUERY_OK";
+
+      if (providerStatus === "SUCCESSFUL" || providerStatus === "SUCCESS") {
+        return { status: "completed", operatorCode };
+      }
+      if (providerStatus === "FAILED" || providerStatus === "REJECTED") {
+        return {
+          status: "failed",
+          operatorCode: response.data?.reason || providerStatus,
+        };
+      }
+      if (providerStatus === "PENDING") {
+        return { status: "pending", operatorCode };
+      }
+      return { status: "unknown", operatorCode: providerStatus || "UNKNOWN" };
+    } catch (err: any) {
+      const operatorCode = err.response?.status
+        ? `HTTP_${err.response.status}`
+        : "NETWORK_ERROR";
+      return { status: "unknown", operatorCode };
     }
   }
 }
