@@ -43,6 +43,7 @@
     "migrate:dry-run": "tsx src/scripts/migrate.ts dry-run",
     "seed": "tsx src/scripts/seed.ts",
     "reconcile:ledger": "tsx src/scripts/reconcile-ledger.ts",
+    "rotate:keys": "tsx src/scripts/rotate-keys.ts",
     "backup:create": "tsx src/scripts/backup.ts",
     "backup:verify": "tsx src/scripts/verify-backups.ts",
     "backup:restore-test": "bash scripts/backup-restore-test.sh",

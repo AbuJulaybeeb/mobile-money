@@ -127,7 +127,10 @@ import { WebSocketManager } from "./websocket";
 import { layeredCache } from "./services/layeredCache";
 import { ERROR_CODES } from "./constants/errorCodes";
 import { startApolloServer } from "./graphql/server";
-import { applySecurityMiddleware } from "./config/express";
+import {
+  applySecurityMiddleware,
+  interactiveSecurityMiddleware,
+} from "./config/express";
 import { createCorsMiddleware } from "./middleware/cors";
 
 dotenv.config();
@@ -193,6 +196,8 @@ app.use(tracingMetricsMiddleware);
 // Helmet, CORS, and related security headers are applied inside
 // applySecurityMiddleware() imported from "./config/express".
 applySecurityMiddleware(app);
+// Stricter, view-specific headers for server-rendered SEP-24 web views.
+app.use("/sep24/interactive", interactiveSecurityMiddleware);
 
 // Compression middleware
 if (process.env.COMPRESSION_ENABLED !== "false") {
@@ -465,7 +470,7 @@ app.use("/api/admin/assets", adminAssetRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/statements", statementsRoutes);
 app.use("/api/monitoring", adminControllerRouter);
-app.get("/", (_req: Request, res: Response) => {
+app.get("/", interactiveSecurityMiddleware, (_req: Request, res: Response) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(SEP24_INTERACTIVE_HTML);
 });
